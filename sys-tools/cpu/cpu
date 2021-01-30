@@ -1,0 +1,254 @@
+#!/bin/bash
+#
+# v1.0
+# Feb 13 2020
+# Reach or <xinx.e.zhang@intel.com> if needed.
+#
+#(Please enable P-State firstly or would be failed to adjust the CPU Frequency)
+# Structure: 
+#   cpu [option] 
+#       |____set [core|uncore] 
+#       |     |___core [Freq] (like: 3GHz=3000000) 
+#       |     |___uncore [rdmsr|wrmsr] 
+#       |            |___rdmsr [rdmsr_cmds] (like: -p 1 0x620 -- read the uncore frequency of number 1 processor) 
+#       |            |___wrmsr [wrmsr_cmds] (like: -a 0x620 0x1414 -- fix the uncore frequency at 2.0GHz for all processors) 
+#       |                 uncore msr register address __/      | |__ minimum frequency: 0x14 -- 1x16^1+4x16^0 
+#       |                                                      |__ maximum frequency: 0x14 -- 1x16^1+4x16^0 
+#       |     
+#       |____show -- print current cores frequencies and the power policy used by the CPU 
+#       |       
+#       |____offline [core|core_list] (like: 0-6,8,10 #to logically shutdown CPU0-6 and CPU8 and CPU10 ) 
+#       | 
+#       |____online  [core|core_list] (online 0-6 #to bring CPU0-6 back online ) 
+#
+USAGE=$(cat <<- EOM
+    Usage: $0 [options] [arg(s)] \n
+           $0 set core [Freq Value] \n
+           $0 set uncore rdmsr [rdmsr_cmds] \n
+           $0 set uncore wrmsr [wrmsr_cmds] \n
+           $0 show \n
+           $0 offline [core|core_lists|core+core_lists] \n
+           $0 online [core|core_lists|core+core_lists] \n
+    e.g. \n
+         ------------------ CMD --------------------       ---------------------------- COMMENT -------------------------------- \n
+         $0 set core 3000000            \t\t -- fix the core frequency at 3.0GHz for all processors. \n
+         $0 set uncore rdmsr -p 1 0x620 \t -- read the 16 bits value from the MSR 0x620. \n
+         $0 set uncore wrmsr -a 0x1414  \t -- fix the uncore frequency at 2.0GHz for all processors. \n
+         $0 set uncore rdmsr -h       \t  \t -- find the use guide of rdmsr. \n
+         $0 set uncore wrmsr -h       \t  \t -- find the use guide of wrmsr. \n
+         $0 show                     \t\t\t  \t -- print current cores frequencies and the power policy used by the CPU. \n
+         $0 offline 0-6,8,10         \t\t -- to logically shutdown CPU0-6 and CPU8 and CPU10. \n
+         $0 online 1,3                \t\t  \t -- to bring CPU1 and CPU3 back online. \n
+         $0 online 0-6                 \t\t \t -- to bring CPU0-6 back online. \n
+EOM
+)
+
+set_core_freq() {
+    cpu_arr=(`lscpu -b -p | awk -F "," '$1 >=0  {print $1}'`)
+    max_freq=()
+    min_freq=()
+
+    for i in ${cpu_arr[@]} ;{
+        max_freq[online_index]=`cat /sys/devices/system/cpu/cpufreq/policy${i}/scaling_max_freq`
+        min_freq[online_index]=`cat /sys/devices/system/cpu/cpufreq/policy${i}/scaling_min_freq`
+        let online_index++
+    }
+
+    max_arr=(`echo ${max_freq[@]} | sed 's/ /\n/g' | sort -n | uniq`)
+    min_arr=(`echo ${min_freq[@]} | sed 's/ /\n/g' | sort -n | uniq`)
+
+    [[ $1 ]] && freq=$1 || freq=2500000
+
+    [ $freq -ge ${max_arr[0]} ] && adjust_direc=(max min) || adjust_direc=(min max)
+
+    for i in ${cpu_arr[@]} ;{
+        echo $i
+        echo "${freq}" > /sys/devices/system/cpu/cpufreq/policy$i/scaling_${adjust_direc[0]}_freq
+        echo "${freq}" > /sys/devices/system/cpu/cpufreq/policy$i/scaling_${adjust_direc[-1]}_freq
+    }
+
+    sleep 3
+    for i in ${cpu_arr[@]} ;{
+        echo $i
+        echo "performance" > /sys/devices/system/cpu/cpufreq/policy$i/scaling_governor
+    }
+
+    sleep 2
+    show_freq
+
+}
+
+offline() {
+    echo "pre cpu list: "
+    lscpu | grep list
+    echo "-------------------------------"
+    echo "  -->operated[offline] cpu: ${core_id[@]}"
+    echo "-------------------------------"
+
+    for cpu in ${core_id[@]} ;{
+        echo 0 > /sys/devices/system/cpu/cpu${cpu}/online
+    }
+    
+    echo "current cpu list:"
+    lscpu | grep list
+    echo "-------------------------------"
+
+}
+
+online() {
+    echo "pre cpu list:"
+    lscpu | grep list
+    echo "-------------------------------"
+    echo "  -->operated[online] cpu: ${core_id[@]}"
+    echo "-------------------------------"
+    
+    for cpu in ${core_id[@]} ;{
+        echo 1 > /sys/devices/system/cpu/cpu${cpu}/online
+    }
+
+    echo "current cpu list:"
+    lscpu | grep list
+    echo "-------------------------------"
+}
+
+par_str() {
+    core_lists=($@)
+    #core_lists=(1,3,5,10-12,7-9)
+    #echo "raw list: ${core_lists[@]}"
+    l1=(`echo ${core_lists[@]} | sed 's/,/ /g'`)
+    #echo "l1: ${l1[@]}"
+    #echo "l1 len: ${#l1[@]}"
+    l2=""
+    l3=""
+    for i in ${l1[@]} ;{
+        [[ "${i}" =~ "-" ]] && {
+            l2="${l2}${i} "
+        } || {
+            l3="${l3}${i} "
+        }
+    }
+    #echo "l2: $l2"
+    l2_arr=($l2)
+    l2_num=""
+    for l in ${l2_arr[@]} ;{
+        par_range $l
+        l2_num="${l2_num}${r_num} "
+    }
+    #echo "l2_num: $l2_num"
+    #echo "l3: $l3"
+    core_id=(`echo $l2_num $l3`)
+    #echo "core_id: ${core_id[@]}"
+    #echo "core_id len: ${#core_id[@]}"
+    [ ${#core_id[@]} -gt 1 ] && {
+        sorts ${core_id[@]}
+        core_id=(`echo ${cp_num_list[@]} | sed 's/ /\n/g' | uniq`)
+    }
+
+}
+
+par_range() {
+    r1=$1
+    r_arr=(`echo $r1 |  sed 's/-/ /'`)
+    r_num=""
+    for ((r=${r_arr[0]};r<=${r_arr[1]};r++)) ;{
+        r_num="${r_num}${r} "
+    }
+}
+
+sorts() {
+    num_list=($@)
+    list_len=${#num_list[@]}
+    cp_num_list=(${num_list[@]})
+    #echo "cp_num_list raw: ${cp_num_list[@]}"
+    for ((t=0;t<list_len-1;t++)) ;{
+        for ((o=1;o<=list_len-1;o++)) ;{
+            [ ${cp_num_list[o-1]} -gt ${cp_num_list[o]} ] && {
+                temp=${cp_num_list[o-1]}
+                cp_num_list[o-1]=${cp_num_list[o]}
+                cp_num_list[o]=$temp
+            }
+        }
+    }
+    #echo "cp_num_list: ${cp_num_list[@]}"
+}
+
+_warn() {
+    echo "unsupported parameter!"
+    echo
+    echo -e $USAGE 
+    exit 2
+}
+
+show_freq() {
+    cpu_arr=(`lscpu -b -p | awk -F "," '$1 >=0  {print $1}'`)
+    echo
+    echo "total cpu scaling_max_freq: `cat /sys/devices/system/cpu/cpufreq/policy*/scaling_max_freq | sort -n | uniq | xargs`"
+    echo "total cpu scaling_min_freq: `cat /sys/devices/system/cpu/cpufreq/policy*/scaling_min_freq | sort -n | uniq | xargs`"
+    echo "total cpu scaling_governor: `cat /sys/devices/system/cpu/cpufreq/policy*/scaling_governor | sort -n | uniq | xargs`"
+    echo
+    online_index=0
+    max_freq=()
+    min_freq=()
+    cpu_governor=()
+    for i in ${cpu_arr[@]} ;{
+        max_freq[online_index]=`cat /sys/devices/system/cpu/cpufreq/policy${i}/scaling_max_freq`
+        min_freq[online_index]=`cat /sys/devices/system/cpu/cpufreq/policy${i}/scaling_min_freq`
+        cpu_governor[online_index]=`cat /sys/devices/system/cpu/cpufreq/policy${i}/scaling_governor`
+        let online_index++
+    }
+
+    max_arr=(`echo ${max_freq[@]} | sed 's/ /\n/g' | sort -n | uniq`)
+    min_arr=(`echo ${min_freq[@]} | sed 's/ /\n/g' | sort -n | uniq`)
+    policy_arr=(`echo ${cpu_governor[@]} | sed 's/ /\n/g' | uniq`)
+    echo "online CPU(x${#cpu_arr[@]}) max_freq: ${max_arr[@]}"
+    echo "online CPU(x${#cpu_arr[@]}) min_freq: ${min_arr[@]}"
+    echo "online CPU(x${#cpu_arr[@]}) cpu_poli: ${policy_arr[@]}"
+
+}
+
+
+main() {
+    [ $USER != root ] && echo 'user must be root user, please try again.' && exit 1
+    case $1 in
+        set) 
+            shift
+            case $1 in
+                core)
+                    shift
+                    set_core_freq $1
+                ;;
+                uncore)
+                    RPATH=/usr/sbin
+                    RDMSR=${RPATH}/rdmsr
+                    WRMSR=${RPATH}/wrmsr
+                    shift
+                    opt=$1
+                    shift
+                    [ $# -gt 0 ] && args_list=($@) || _warn
+                    args_list=($@)
+                    [ ! -x $RDMSR ] || [ ! -x $WRMSR ] && echo "Please install MSR Tools firstly" && exit 3
+                    [ "$opt" == "rdmsr" ] || [ "$opt" == "wrmsr" ] || _warn && echo "$opt ${args_list[@]}" && $RPATH/$opt ${args_list[@]} 
+                ;;
+                *)
+                    _warn
+                ;;
+            esac
+        ;;
+        show)
+            shift
+            show_freq
+        ;;
+        "online"|"offline")
+            cmd=$1
+            shift
+            par_str $@
+            echo "cmd: $cmd, args: $@"
+            $cmd
+        ;;
+        *)
+            _warn
+        ;;
+    esac
+}
+
+main $@
