@@ -1,0 +1,1019 @@
+#!/bin/bash
+VERSION=v1.9
+DATE="June/22/2020"
+AUTHOR="ZhangXin"
+
+_vmip=(
+	vm0 192.168.1.100
+	vm1 192.168.1.104 
+	#vm2 192.168.1.102 
+	vm3 192.168.1.103
+	vm4 192.168.1.105
+	#vm5 192.168.1.102
+
+)
+
+_nodeip=(
+	node0 172.31.1.1
+	node1 172.31.2.1
+	node2 172.31.3.1
+)
+
+docmd(){
+	ssh media@$1 "sudo ssh root@$2 $3"
+
+}
+
+node_alive_check() {
+	xip=$1
+	xxip=$2
+	docmd $xip $xxip 'echo' > /dev/null 2>&1 &
+	#pidd=$!
+	xpidd=`ps aux | grep "ssh media@$xip sudo ssh root@$xxip" | grep -v grep | awk '{print $2}'`
+	sleep 1
+	ps aux | grep "ssh media@$xip sudo ssh root@$xxip" | grep -v grep > /dev/null 2>&1 || xpidd=0000
+	
+	#echo "pidd == $pidd, xpidd == $xpidd"
+	#echo "++++++++++++++++++++++++++++++++++++++++"
+	#ps aux | grep "ssh media@$xip" | grep -v grep
+	#echo "++++++++++++++++++++++++++++++++++++++++"
+	[ $xpidd -ne 0000 ] && echo "error: ssh from $xip to $xxip -- failed!" && kill -9 $xpidd && continue
+}
+
+
+vm_alive_check() {
+	xip=$1
+	ssh media@$xip 'echo' > /dev/null 2>&1 &
+	xpidd=`ps aux | grep "ssh media@$xip" | grep -v grep | awk '{print $2}'`
+	sleep 1
+	ps aux | grep "ssh media@$xip" | grep  -v grep  > /dev/null 2>&1 || xpidd=0000
+	#echo "xpidd=$xpidd"
+	[ $xpidd -ne 0000 ] && echo "error: ssh from localhost to $xip -- failed!" && kill -9 $xpidd && continue
+}
+
+LOCAL_VARIABLE=test
+fps_service () {
+	echo "$LOCAL_VARIABLE"
+	sed -n 's/^.*RES=\(.*\)\" .*/\1/p' /lib/systemd/system/irr.*.service | uniq 
+}
+
+check_nodes(){
+	for ((i=0;i<${#_vmip[@]};i++))
+	do
+		score=$(($i%2)) 
+		[ $score -eq 0 ] && continue
+		xip=${_vmip[$i]}
+		vm_alive_check $xip
+		host_name=`ssh media@$xip "sudo cat /etc/hostname"`
+		echo "#####$host_name -- $xip"
+		for ((j=0;j<${#_nodeip[@]};j++))
+		do
+			sscore=$(($j%2))
+			[ $sscore -eq 0 ] && continue
+			xxip=${_nodeip[$j]}
+			node_alive_check $xip $xxip
+			node_name=`ssh media@$xip "sudo ssh root@$xxip 'hostnamectl'" | awk ' $1 == "Transient" {print $NF} '`
+			echo "$node_name -- $xxip"
+			#irr_num_set=`docmd $xip $xxip 'grep irr-client.sh /etc/rc.local' | sed 's/\/root\/irr-client.sh \(.*\)/\1/'`
+			irr_num_set=`docmd $xip $xxip 'ls /lib/systemd/system/irr.*.service' | wc -l`
+			echo "[check] -- irr link by defa: $irr_num_set"
+			#fps_set=(`docmd $xip $xxip "$(set);fps_service"`)
+			#fps_cmd=( sed -n 's/^.*RES=\(.*\)\" .*/\1/p' /lib/systemd/system/irr.*.service | uniq )
+			#fps_cmd=( sed -n \'s/^.*RES=\(.*\)\" .*/\1/p\' /lib/systemd/system/irr.*.service )
+			#fps_set=(`docmd $xip $xxip "sed -n 's/^.*RES=\(.*\)\" .*/\1/p' /lib/systemd/system/irr.*.service | uniq"`)
+
+			#fps_set=(`ssh media@$xip sudo ssh root@$xxip sed -n 's/^.*RES=\(.*\)\" .*/\1/p' /lib/systemd/system/irr.*.service | uniq`)
+			fps_set=(`docmd $xip $xxip 'cat /lib/systemd/system/irr.*.service' | sed -n 's/^.*RES=\(.*\)\" .*/\1/p' | uniq`)
+
+			irr_brc_set=(`docmd $xip $xxip 'grep BRC= /lib/systemd/system/irr.*' | cut -d\  -f5 | uniq`)
+
+			#fps_set=(`docmd $xip $xxip ${fps_cmd[@]} | uniq`)
+			echo "[check] -- irr FPS settings: ${fps_set[@]}"
+			echo "[check] -- irr BRC settings: ${irr_brc_set[@]} "
+		done
+		echo "-------------------------------------------------------------------" 
+	done
+}
+
+node_cmd() {
+	_cmd=$@
+	for ((i=0;i<${#_vmip[@]};i++))
+	do
+		score=$(($i%2))
+		[ $score -eq 0 ] && continue
+		xip=${_vmip[$i]}
+		vm_alive_check $xip
+		host_name=`ssh media@$xip "sudo cat /etc/hostname"`
+		echo "#####$host_name -- $xip"
+		for ((j=0;j<${#_nodeip[@]};j++))
+		do
+			sscore=$(($j%2))
+			[ $sscore -eq 0 ] && continue
+			xxip=${_nodeip[$j]}
+			node_alive_check $xip $xxip
+			node_name=`ssh media@$xip "sudo ssh root@$xxip 'hostnamectl'" | awk ' $1 == "Transient" {print $NF} '`
+			echo "$node_name -- $xxip"
+			#echo "$xxip"
+			docmd $xip $xxip "$_cmd"
+		done
+
+	done
+}
+
+check_irr() {
+	_cmd=$@
+	for ((i=0;i<${#_vmip[@]};i++))
+	do
+		score=$(($i%2))
+		[ $score -eq 0 ] && continue
+		xip=${_vmip[$i]}
+		vm_alive_check $xip
+		host_name=`ssh media@$xip "sudo cat /etc/hostname"`
+		echo "#####$host_name -- $xip"
+		for ((j=0;j<${#_nodeip[@]};j++))
+		do
+			sscore=$(($j%2))
+			[ $sscore -eq 0 ] && continue
+			xxip=${_nodeip[$j]}
+			node_alive_check $xip $xxip
+			node_name=`ssh media@$xip "sudo ssh root@$xxip 'hostnamectl'" | awk ' $1 == "Transient" {print $NF} '`
+			irr_conn=`docmd $xip $xxip 'ps aux' | grep  intel_remote_renderer | grep -v grep | wc -l`
+			irr_set=(`docmd $xip $xxip 'ps aux' | grep  intel_remote_renderer | grep -v grep | sed 's/^.*-res \(.*\) -stream.*/\1/' | uniq`)
+			irr_brc=(`docmd $xip $xxip 'grep BRC= /lib/systemd/system/irr.*' | cut -d\  -f5 | uniq`)
+			echo "$node_name -- $xxip irr connection: $irr_conn -- settings: ${irr_set[@]} -- brc: ${irr_brc[@]}"
+		done
+
+	done
+}
+
+dump_node_log() {
+	node_log_dir=all-node-log-`date +%m%d-%H%M%S`
+	mkdir -p ${node_log_dir}
+	echo "vmip: ${_vmip[@]}"
+	echo "vmip length: ${#_vmip[@]}"
+	for ((i=0;i<${#_vmip[@]};i++))
+	do
+		score=$(($i%2))
+		[ $score -eq 0 ] && continue
+		xip=${_vmip[$i]}
+		vm_alive_check $xip
+		host_name=`ssh media@$xip "sudo cat /etc/hostname"`
+		echo "#####$host_name -- $xip"
+		mkdir -p ${node_log_dir}/${host_name}
+		for ((j=0;j<${#_nodeip[@]};j++))
+		do
+			sscore=$(($j%2))
+			[ $sscore -eq 0 ] && continue 
+			xxip=${_nodeip[$j]}
+			node_alive_check $xip $xxip
+			node_name=`ssh media@$xip "sudo ssh root@$xxip 'hostnamectl'" | awk ' $1 == "Transient" {print $NF} '`
+			echo "$node_name -- $xxip"
+			toid=${node_log_dir}/${host_name}/${node_name}
+			docmd $xip $xxip "journalctl --list-boots" | awk '{print $1}' > ${toid}_log_list.txt
+			ls -l ${toid}_log_list.txt
+			#for k in `cat ${toid}_log_list.txt`
+			for k in 0
+			do
+				echo "${toid}:${k} -- b${k}.log"
+				
+				docmd $xip $xxip "journalctl -k -b${k}" > ${toid}_b${k}.log
+				ls -l ${toid}_b${k}.log
+				sleep 2
+			done
+		done
+	done
+}
+
+vm_cmd() {
+	_cmd=$@
+	echo "vmip: ${_vmip[@]}"
+	for ((i=0;i<${#_vmip[@]};i++))
+	do
+		score=$(($i%2))
+		[ $score -eq 0 ] && continue
+		xip=${_vmip[$i]}
+		vm_alive_check $xip
+		host_name=`ssh media@$xip "sudo cat /etc/hostname"`
+		echo "#####$host_name -- $xip"
+		ssh media@$xip "$_cmd"
+	done
+}
+
+host_freq() {
+	if [ $cpu_list ]
+	then
+		_cpus=(`echo $cpu_list | sed 's/-/ /g;s/,/ /'`)
+		for ((i=${_cpus[0]};i<=${_cpus[1]};i++))
+		do
+			lists+="$i,"
+		done
+	
+		for ((j=${_cpus[2]};j<=${_cpus[3]};j++))
+		do
+			lists+="$j,"
+		done
+		cpus="`echo $lists | sed 's/,$//'`"
+		#echo "sar -P $cpus -m CPU $sec $loop"
+		echo "cmd: sar -P $cpus $fcmd $ucmd $sec $loop"
+		sar -P $cpus $fcmd $ucmd $sec $loop
+	else
+		echo "cmd: sar $fcmd $ucmd $sec $loop"
+		sar $fcmd $ucmd $sec $loop
+	fi
+}
+
+
+
+scopy_tovm() {
+	#_cmd=$@
+	#check_args $@
+	_from_file=$1
+	_to_file=$2
+	for ((i=0;i<${#_vmip[@]};i++))
+	do
+		score=$(($i%2))
+		[ $score -eq 0 ] && continue
+		xip=${_vmip[$i]}
+		vm_alive_check $xip
+		xvm="media@$xip"
+		host_name=`ssh media@$xip "sudo cat /etc/hostname"`
+		echo "#####$host_name -- $xip"
+		echo "copy $_from_file to $xvm's $_to_file"
+		scp -r $_from_file $xvm:$_to_file
+	done
+
+}
+
+fetch_node_name(){
+	for ((i=0;i<${#_vmip[@]};i++))
+	do
+		score=$(($i%2))
+		[ $score -eq 0 ] && continue
+		xip=${_vmip[$i]}
+		vm_alive_check $xip
+		host_name=`ssh media@$xip "sudo cat /etc/hostname"`
+		echo "#####$host_name -- $xip"
+		for ((j=0;j<${#_nodeip[@]};j++))
+		do
+			sscore=$(($j%2))
+			[ $sscore -eq 0 ] && continue
+			xxip=${_nodeip[$j]}
+			node_alive_check $xip $xxip
+			node_name=`ssh media@$xip "sudo ssh root@$xxip 'hostnamectl'" | awk ' $1 == "Transient" {print $NF} '`
+			echo "$node_name -- $xxip"
+			fetch_node_name="${host_name}-${node_name}"
+			echo "node_name: ${fetch_node_name}"
+			ssh media@$xip sudo ssh root@$xxip "echo ${fetch_node_name} \> /root/name.txt"
+		done
+	done		
+}
+
+scopy() {
+
+	_file_from=$1
+	_to_path=$2
+	for ((i=0;i<${#_vmip[@]};i++))
+	do
+		score=$(($i%2))
+		[ $score -eq 0 ] && continue
+		xip=${_vmip[$i]}
+		vm_alive_check $xip
+		host_name=`ssh media@$xip "sudo cat /etc/hostname"`
+		echo "#####$host_name -- $xip"
+		[ $_mode == "tovm" ] && echo "copy $_file_from to $xip:$_to_path" && scp -r $_file_from media@$xip:$_to_path
+
+		if [ $_mode == "tonode" ]
+		then
+			_file_to_vm_dir="~/transfer-station-tonode"
+			_file_from_rename=`echo ${_file_from} | awk -F '/' '{print $NF}'`
+			_file_to_node="${_file_to_vm_dir}/${_file_from_rename}"
+			#echo "_file_from_rename: $_file_from_rename"
+			#echo "_file_to_node: $_file_to_node"
+			#echo "ssh media@$xip mkdir -p $_file_to_vm_dir"
+			ssh media@$xip "mkdir -p $_file_to_vm_dir"
+			[ $? -ne 0 ] && echo "perform command failed, please check the persission of current user" && exit -1
+			echo "scp -r $_file_from media@$xip:$_file_to_vm_dir"
+			scp -r $_file_from media@$xip:$_file_to_vm_dir
+			for ((j=0;j<${#_nodeip[@]};j++))
+                	do
+                        	sscore=$(($j%2))
+                        	[ $sscore -eq 0 ] && continue
+                        	xxip=${_nodeip[$j]}
+                        	node_alive_check $xip $xxip
+                       		node_name=`ssh media@$xip "sudo ssh root@$xxip 'hostnamectl'" | awk ' $1 == "Transient" {print $NF} '`
+                        	echo "$node_name -- $xxip"
+				echo "ssh media@$xip sudo scp -r $_file_to_node root@$xxip:${_to_path}"
+				ssh media@$xip "sudo scp -r $_file_to_node root@$xxip:${_to_path}"
+			done
+		fi
+	done
+	
+	#_filefrom_tonode=$1
+	#_to_node_path=$2
+        #_file_to_vm_dir="~/transfer-station-tonode"
+	#_file_to_node="${_file_to_vm_dir}/${_filefrom_tonode}"
+	#for ((i=0;i<${#_vmip[@]};i++))
+	#do
+	#	score=$(($i%2))
+	#	[ $score -eq 0 ] && continue
+	#	xip=${_vmip[$i]}
+	#	vm_alive_check $xip
+	#	host_name=`ssh media@$xip "sudo cat /etc/hostname"`
+        #        echo "#####$host_name -- $xip"
+        #        ssh media@$xip "mkdir -p $_file_to_vm_dir"
+	#	[ $? -ne 0 ] && echo "perform command failed, please check the persission of current user" && exit -1
+	#	#echo "scp -r $_filefrom_tonode media@$xip:$_file_to_vm_dir"
+	#	scp -r $_filefrom_tonode media@$xip:$_file_to_vm_dir
+	#
+	#	for ((j=0;j<${#_nodeip[@]};j++))
+	#	do
+	#		sscore=$(($j%2))
+	#		[ $sscore -eq 0 ] && continue
+	#		xxip=${_nodeip[$j]}
+	#		node_alive_check $xip $xxip
+	#		node_name=`ssh media@$xip "sudo ssh root@$xxip 'hostnamectl'" | awk ' $1 == "Transient" {print $NF} '`
+	#		echo "$node_name -- $xxip"
+	#		#echo "ssh media@$xip sudo scp -r $_file_to_node root@$xxip:${_to_node_path}"
+	#		ssh media@$xip "sudo scp -r $_file_to_node root@$xxip:${_to_node_path}"
+	#	done
+	#done
+}
+
+
+check_args(){
+	args=($@)
+	len=${#args[@]}
+	cmd_len=$(($len-1))
+	[ ${args[0]} -ne ${cmd_len} ] && echo "{cmd_len} arguments given, but need ${args[0]} arguments" && exit
+	
+}
+
+
+bypass_vm() {
+	for i in $@
+	do
+		if [[ "$i" =~ "vm" ]]
+		then 
+			sed -i "1,10s/$i 192.168/\#$i 192.168/" $0
+		else
+			echo "the format of $i is wrong, need vm1/vm2/vmx ..."
+			continue
+		fi
+	done
+	echo "$@ bypassed!"
+}
+
+enable_vm() {
+	for i in $@
+	do
+		if [[ "$i" =~ "vm" ]]
+		then
+			sed -i "1,10s/\#$i 192.168/$i 192.168/" $0
+		else
+			echo "the format of $i is wrong, need vm1/vm2/vmx ..."
+			continue
+		fi
+	done
+	echo "$@ enabled!"
+}
+
+enable_all() {
+	for i in {0..7}
+	do
+		vm=vm$i
+		sed -i "1,10s/\#$vm 192.168/$vm 192.168/" $0
+	done
+	echo "all vms enabled!"
+}
+
+
+vm_list(){
+	[ ${#_vmip[@]} -eq 0 ] && echo "no vm available!" && exit
+
+	for ((i=0;i<${#_vmip[@]};i++))
+	do
+		score=$(($i%2))
+		[ $score -ne 0 ] && echo ${_vmip[$i]} || echo -n "${_vmip[$i]} "
+	done
+}
+
+improve_freq(){
+	echo "improve the host CPU frequency"
+	#cpu_num=`nproc --all`
+	cpu_arr=(`lscpu -b -p | awk -F "," '$1 >=0  {print $1}'`)
+
+	#for((i=0;i<$cpu_num;i=i+1))
+	for i in ${cpu_arr[@]}
+	do
+	  echo $i
+	  echo "3000000" > /sys/devices/system/cpu/cpufreq/policy$i/scaling_min_freq
+	  echo "3000000" > /sys/devices/system/cpu/cpufreq/policy$i/scaling_max_freq
+	  echo "performance" > /sys/devices/system/cpu/cpufreq/policy$i/scaling_governor
+	done
+}
+
+cpu_string() {
+	#node0_str="NUMA node0 CPU(s):    0-23,48-71"
+	#node1_str="NUMA node1 CPU(s):    24-47,72-95"
+	numa_node=`lscpu | grep node\(s\) | awk '{print $NF}'`
+	[ $numa_node -ne 2 ] && echo "unsupport numa number, only support 2 numa node" && exit
+	
+	node0_str="`lscpu | grep node0`"
+	node1_str="`lscpu | grep node1`"
+
+	node0=($(echo $node0_str | awk '{print $NF}' | sed 's/-/ /g;s/,/ /g'))
+	node1=($(echo $node1_str | awk '{print $NF}' | sed 's/-/ /g;s/,/ /g'))
+	
+	#echo node0 ${node0[@]}
+	#echo node1 ${node1[@]}
+}
+
+cpu_map() {
+
+	[ -z $3 ] && echo -n "     : " || echo -n "node$3: "
+	cc=0 
+	for ((i=$1;i<=$2;i++))
+	do
+		next=$(($cc+1))
+		nnext=$((${next}%${t_interval}))
+		if [ $nnext -eq 0 ]
+		#if [[ $cc -eq 7 || $cc -eq 15 || $cc -eq 23 || $cc -eq 31 ]]
+		then
+			[ $i -lt 10 ] && echo -en "$i       " || echo -en "$i      "
+		else
+			[ $i -lt 10 ] && echo -en "$i  " || echo -en "$i "
+		fi
+		let cc++
+	done
+	echo
+}
+
+cpu_topology() {
+	cpu_string
+	n0_realbegin=${node0[0]}
+	n0_realend=${node0[1]}
+	n0_imgbegin=${node0[2]}
+	n0_imgend=${node0[3]}
+	
+	n1_realbegin=${node1[0]}
+	n1_realend=${node1[1]}
+	n1_imgbegin=${node1[2]}
+	n1_imgend=${node1[3]}
+
+	cpu_map n0_realbegin n0_realend 0
+	cpu_map n0_imgbegin n0_imgend
+	echo
+	cpu_map n1_realbegin n1_realend 1
+	cpu_map n1_imgbegin n1_imgend
+
+}
+
+allot_core() {
+	echo "qemu-affinity $a_pid -q *:$a_cpu_list -k *:$a_cpu_list -w *:$a_cpu_list -p $a_cpu_list"
+	qemu-affinity $a_pid -q *:$a_cpu_list -k *:$a_cpu_list -w *:$a_cpu_list -p $a_cpu_list
+	echo "taskset -pc $a_cpu_list [the_unallot_thread]"
+}
+
+cfg_sshkey() {
+	[ -f /root/.ssh/id_rsa.pub ] && echo key existed || ssh-keygen
+	for ((i=0;i<${#_vmip[@]};i++))
+	do
+		score=$(($i%2))
+		[ $score -eq 0 ] && continue
+		xip=${_vmip[$i]}
+		echo "ssh-copy-id media@$xip"
+		ssh-copy-id media@$xip
+		#vm_alive_check $xip
+		#host_name=`ssh media@$xip "sudo cat /etc/hostname"`
+		#echo "#####$host_name -- $xip"
+	
+	done
+}
+
+boot_intonode() {
+	for ((i=0;i<${#_vmip[@]};i++))
+	do
+		score=$(($i%2))
+		[ $score -eq 0 ] && continue
+		xip=${_vmip[$i]}
+		vm_alive_check $xip
+		host_name=`ssh media@$xip "sudo cat /etc/hostname"`
+		echo "#####$host_name -- $xip"
+		for ((j=0;j<${#_nodeip[@]};j++))
+		do
+			sscore=$(($j%2))
+			[ $sscore -eq 0 ] && continue
+			xxip=${_nodeip[$j]}
+			node_alive_check $xip $xxip
+			node_tag=`ssh media@$xip "sudo ssh root@$xxip cat /root/name.txt"`
+			echo "$node_tag is ready"
+		done
+	done
+
+}
+
+check_cpu() {
+	cpu_arr=(`lscpu -b -p | awk -F "," '$1 >=0  {print $1}'`)
+	echo "total cpu scaling_max_freq: `cat /sys/devices/system/cpu/cpufreq/policy*/scaling_max_freq | sort -n | uniq | xargs`"
+	echo
+	echo "total cpu scaling_min_freq: `cat /sys/devices/system/cpu/cpufreq/policy*/scaling_min_freq | sort -n | uniq | xargs`"
+	echo
+	echo "total cpu scaling_governor: `cat /sys/devices/system/cpu/cpufreq/policy*/scaling_governor | sort -n | uniq | xargs`"
+	echo 
+	online_index=0
+	max_freq=()
+	min_freq=()
+	cpu_governor=()
+	for i in ${cpu_arr[@]}
+	do
+		max_freq[online_index]=`cat /sys/devices/system/cpu/cpufreq/policy${i}/scaling_max_freq`
+		min_freq[online_index]=`cat /sys/devices/system/cpu/cpufreq/policy${i}/scaling_min_freq`
+		cpu_governor[online_index]=`cat /sys/devices/system/cpu/cpufreq/policy${i}/scaling_governor`
+		let online_index++
+	done
+	
+	max_arr=(`echo ${max_freq[@]} | sed 's/ /\n/g' | sort -n | uniq`)
+	min_arr=(`echo ${min_freq[@]} | sed 's/ /\n/g' | sort -n | uniq`)
+	policy_arr=(`echo ${cpu_governor[@]} | sed 's/ /\n/g' | uniq`)
+	echo "${#cpu_arr[@]}cpu max_freq: ${max_arr[@]}"
+	echo "${#cpu_arr[@]}cpu min_freq: ${min_arr[@]}"
+	echo "${#cpu_arr[@]}cpu cpu_poli: ${policy_arr[@]}"
+	
+}
+
+up_freq() {
+
+	#cpu_num=`nproc --all`
+	cpu_arr=(`lscpu -b -p | awk -F "," '$1 >=0  {print $1}'`)
+
+	#for((i=0;i<$cpu_num;i=i+1))
+	for i in ${cpu_arr[@]}
+	do
+		echo $i
+		#echo "3100000" > /sys/devices/system/cpu/cpufreq/policy$i/scaling_max_freq
+		#echo "3100000" > /sys/devices/system/cpu/cpufreq/policy$i/scaling_min_freq
+		echo "2300000" > /sys/devices/system/cpu/cpufreq/policy$i/scaling_max_freq
+		echo "2300000" > /sys/devices/system/cpu/cpufreq/policy$i/scaling_min_freq
+	done
+
+	sleep 5
+
+	#for((i=0;i<$cpu_num;i=i+1))
+	for i in ${cpu_arr[@]}
+	do
+		echo $i
+		echo "performance" > /sys/devices/system/cpu/cpufreq/policy$i/scaling_governor
+	done
+}
+
+net_tcp_check() {
+
+	#vm mode
+	tag=$1
+
+	dir_name="sar_log-`date +%m%d-%H%M%S`-${tag}"
+	mkdir -p  /home/aic/work/control/net_status/$dir_name
+	cd /home/aic/work/control/net_status/$dir_name	
+	exec_time=60
+
+	#check host TCP status
+	sar -n TCP 2 $exec_time > host_tcp_status.txt &
+
+	#check vm TCP status
+	for ((i=0;i<${#_vmip[@]};i++)) ;{
+		score=$(($i%2))
+		[ $score -eq 0 ] && continue
+		xip=${_vmip[$i]}
+		vm_alive_check $xip
+		vm_name=`ssh media@$xip "sudo cat /etc/hostname"`
+
+		echo $vm_name: $xip -- sar -n TCP 2 $exec_time
+		ssh media@${xip} sar -n TCP 2 $exec_time > ${vm_name}_tcp_status.txt &
+		vm_list="${vm_list} $vm_name"
+	}
+
+	vm_name_arr=(${vm_list})
+
+	sleep $((3*exec_time))
+	printf "              active/s passive/s    iseg/s    oseg/s\n" > sum_tcp_$tag.txt
+	tail -n1 host_tcp_status.txt | sed "s/Average:...../host Average:/" >> sum_tcp_$tag.txt
+	for i in ${vm_name_arr[@]} ;{
+		vm_log=${i}_tcp_status.txt
+		tail -n1 ${vm_log} | sed "s/Average:..../${i} Average:/" >> sum_tcp_$tag.txt
+	}
+
+	cd ..
+
+}
+
+
+dev_net(){
+	log_timestamp=`date +%m%d-%H%M%S`
+	mkdir -p /home/aic/work/control/net_dev_status/${log_timestamp}
+	cd /home/aic/work/control/net_dev_status/${log_timestamp}
+	net_dev_cmd="sar -n DEV 1 60"
+	net_dev_count=0
+	for ((i=0;i<${#_vmip[@]};i++)) ;{
+		score=$(($i%2))
+		[ $score -eq 0 ] && continue
+		xip=${_vmip[$i]}
+		vm_alive_check $xip
+		host_name=`ssh media@$xip "sudo cat /etc/hostname"`
+		echo "#####$host_name -- $xip: $net_dev_cmd"
+		ssh media@$xip "$net_dev_cmd" >> ${host_name}-raw.txt &
+		net_dev_pid[net_dev_count]=$!
+		let net_dev_count++
+		for ((j=0;j<${#_nodeip[@]};j++)) ;{
+			sscore=$(($j%2))
+			[ $sscore -eq 0 ] && continue
+			xxip=${_nodeip[$j]}
+			node_alive_check $xip $xxip
+			node_name=`ssh media@$xip "sudo ssh root@$xxip 'hostnamectl'" | awk ' $1 == "Transient" {print $NF} '`
+			echo "$node_name -- $xxip: $net_dev_cmd"
+			docmd $xip $xxip "$net_dev_cmd" >> ${host_name}-${node_name}-raw.txt &
+			net_dev_pid[net_dev_count]=$!
+			let net_dev_count++
+		} 	
+	}
+	echo "net_dev pid: ${net_dev_pid[@]}"
+	echo 'check net_dev threads status'
+	for i in ${net_dev_pid[@]} ;{
+		ps aux | grep $i | grep -v grep
+	}
+	echo "wait 70s ..."
+	sleep 70
+	echo 'check net_dev threads status'
+	for i in ${net_dev_pid[@]} ;{
+		ps aux | grep $i | grep -v grep || echo "pid:$i finished!"
+	}
+	echo 
+	echo "log path: /home/aic/work/control/net_dev_status/${log_timestamp}"
+	echo "parse data ..."
+	parse_net_dev /home/aic/work/control/net_dev_status/${log_timestamp} | tee sum.txt
+	cd -
+}
+
+parse_net_dev() {
+	log_dir=$1
+	cd $log_dir
+	vm_dev=(eth0 eth1 eth2)
+	node_dev=eth0
+	file_arr=(`ls`)
+	result_title="Average:        IFACE   rxpck/s   txpck/s    rxkB/s    txkB/s   rxcmp/s   txcmp/s  rxmcst/s   %ifutil"
+	echo -e "tag \t\t $result_title"
+	for i in ${file_arr[@]} ;{
+		if [[ $i =~ "node" ]]
+		then 
+			ntag=`echo "$i" | awk -F '-' '{print $1$3$4}'` 
+			echo -e "$ntag \t `grep Average $i | grep $node_dev`"
+		else
+			[ $i == "sum.txt" ] && continue
+			vtag=`echo $i | awk -F '-' '{print $1}'`
+			for dev in ${vm_dev[@]}; do echo -e "$vtag \t\t `grep Average $i | grep \ $dev\ `"; done
+		fi
+	}
+	cd -
+}
+
+iperf_server_stop() {
+	echo "check ..."
+	vm_cmd sudo ps aux \| grep iperf | grep -v grep 
+	echo "kill iperf server"	
+	vm_cmd sudo pkill iperf | grep -v grep 
+	echo "check ..."
+	vm_cmd sudo ps aux \| grep iperf | grep -v grep 
+}
+
+iperf_test() {
+	log_timestamp=`date +%m%d-%H%M%S`
+	mkdir -p /home/aic/work/control/iperf_test/${log_timestamp}
+	cd /home/aic/work/control/iperf_test/${log_timestamp}
+	iperf_count=0
+	iperf_server_stop
+
+	for ((i=0;i<${#_vmip[@]};i++)) ;{
+		score=$(($i%2))
+		[ $score -eq 0 ] && continue
+		xip=${_vmip[$i]}
+		vm_alive_check $xip
+		host_name=`ssh media@$xip "sudo cat /etc/hostname"`
+		echo "#####$host_name -- $xip: sudo iperf -s > /dev/null 2>&1"
+		ssh media@$xip "sudo iperf -s > /dev/null 2>&1" &
+		iperf_pid[iperf_count]=$!
+		let iperf_count++
+		server_index=1
+		for ((j=0;j<${#_nodeip[@]};j++)) ;{
+			sscore=$(($j%2))
+			[ $sscore -eq 0 ] && continue
+			server_xip=172.31.$server_index.254
+			xxip=${_nodeip[$j]}
+			node_alive_check $xip $xxip
+			node_name=`ssh media@$xip "sudo ssh root@$xxip 'hostnamectl'" | awk ' $1 == "Transient" {print $NF} '`
+			echo "$node_name -- $xxip: iperf -c $server_xip -i 1 -t 60"
+			docmd $xip $xxip "iperf -c $server_xip -i 1 -t 60" >> ${host_name}_node${server_index}_client.txt &
+			iperf_pid[iperf_count]=$!
+			let iperf_count++
+			let server_index++
+	
+		}
+	}		
+	echo "iperf pid: ${iperf_pid[@]}"
+	echo "check iperf threads status"
+	for i in ${iperf_pid[@]} ;{
+		ps aux | grep $i | grep -v grep
+	}	
+	echo "wait 70s ..."
+	sleep 70
+	echo "check iperf threads status"
+	for i in ${iperf_pid[@]} ;{
+		ps aux | grep $i | grep -v grep || echo "pid:$i finished!"
+	}
+	echo 
+	echo "log path: /home/aic/work/control/iperf_test/${log_timestamp}"
+	echo "parse data ..."
+	parse_iperf /home/aic/work/control/iperf_test/${log_timestamp} | tee sum.txt
+	cd -	
+}
+
+parse_iperf () {
+	log_dir=$1
+	cd $log_dir
+	file_arr=(`ls`)
+	for i in ${file_arr[@]} ;{
+		echo "`echo $i | cut -d '_' -f 1,2` `tail -n1 $i`"
+	}
+	cd -
+}
+
+
+device_io_check() {
+	
+	[[ $1 ]] && d_tag=$1 || d_tag=def
+	Host_DEVICE=(/dev/nvme0n1)
+	VM_DEVICE=(/dev/sda /dev/sdb)
+	DEV_ARR=(`echo ${VM_DEVICE[@]} ${Host_DEVICE[@]} | sed 's/\/dev\///g'`)
+	Host_log=host_raw.txt
+	TITLE="Device:         rrqm/s   wrqm/s     r/s     w/s    rkB/s    wkB/s avgrq-sz avgqu-sz   await r_await w_await  svctm  %util"
+
+	Test_dir=io_test_`date +%m%d-%H%M%S`_${d_tag}
+	Wait_sec=300
+	mkdir -p ./io_test/$Test_dir
+	cd ./io_test/$Test_dir
+
+	echo "report input/output statistics for host: $Host_DEVICE"
+	iostat -dx ${Host_DEVICE[@]} 1 ${Wait_sec} > $Host_log &
+
+
+	for ((i=0;i<${#_vmip[@]};i++)) ;{
+	#for i in 192.168.0.102 192.168.0.104 ;{
+		score=$(($i%2))
+		[ $score -eq 0 ] && continue
+		xip=${_vmip[$i]}
+		vm_alive_check $xip
+		vm_name=`ssh media@$xip cat /etc/hostname`
+		echo "report input/output statistics for $vm_name: ${VM_DEVICE[@]}"
+		ssh media@$xip iostat -dx ${VM_DEVICE[@]} 1 ${Wait_sec} > ${vm_name}_raw.txt &
+		vm_name_str="$vm_name_str $vm_name"
+	}
+
+	vm_name_arr=(${vm_name_str})
+	sleep $((2*Wait_sec))
+	for i in host ${vm_name_arr[@]} ;{
+		log_name=${i}_raw.txt
+		new_log=`echo $log_name | sed 's/_raw//'`
+		title_str=`head -n1 $log_name`
+		echo "host date: `date +%m%d-%H%M%S`" > ${new_log}
+		printf "$title_str \n" >> ${new_log}
+		printf "$TITLE \n" >> ${new_log}
+		cat $log_name | sed 's/Dev.*//g;s/^.*CPU.*//g' | grep -v ^$ >> ${new_log}
+		printf "$TITLE \n" > need_${new_log}
+		cat ${new_log} | awk -v tag="${d_tag}_" 'NR>3 {a=$1; print tag""a,$0}' >> need_${new_log}
+	}
+
+	echo "log path: `pwd`"
+	cd -
+}
+
+main(){
+	USAGE=$(cat <<- EOM
+	Usage: $0 function [arguments] \n
+	\n
+	run cmd or check status in the multi-vm or multi-node, execute the function sequentially under the ip list. \n
+	\n	
+	functions: \n
+	\t	settings \t -- \t check the nodes' FPS settings and irr connection enabled by default, no arguments need. \n
+	\t	irr \t\t -- \t check the irr connection's works status [0: no irr connected, 10: 10 irrs connected], no arguments need. \n
+	\t	improve \t -- \t improve host CPU frequency, no arguments need (defaule=3000000 -- 3G).\n
+	\t	scopy \t\t -- \t copy file/folder from host to vm/node, three arguments need: [mode] [file_from_path] [file_to_path] .\n
+	\t	\t\t 	\t like: [tovm] [xxx.txt] [/home/xxx/] or [tonode] [xxx.txt] [/home/xxx/] . \n
+	\t	vm \t\t -- \t transmit cmd to vm, arguments need, like: [sudo date]|[sudo vcactl status] ... \n 
+	\t	node \t\t -- \t transmit cmd to vca node, arguments need, like: [date]|[ls] ... \n
+	\t	bypass \t -- \t bypass the specific vm name/list to access, need vm name/list, like: one vm -- [vm1] or vm list -- [vm1 vm2 vm3 vm4 vmx ...] .\n
+	\t	enable \t -- \t enable the specific vm name/list to access, need vm name/list, like: one vm -- [vm1] or vm list -- [vm1 vm2 vm3 vm4 vmx ...] .\n 
+	\t	enableall \t -- \t enable the all vm to access, no arguments need. \n
+	\t	list \t\t -- \t list the accessible vm, no arguments need. \n
+	\t	ssar \t\t -- \t check the cpus info(freq/utilization), arguments need, like:  [-p [cpulist]] [-u] [-m] -s [sec] -l [loop] -- [ -p 1-6,7-9 -u -m -s 2 -l 5 ]. \n
+	\t	topology \t -- \t check the cpus or irr_num-android_num topology, arguments need, like: [cpu [core_num]] -- [ cpu 6 ] or [irr]. \n
+	\t	allot \t\t -- \t allot the cpu_list for qemu threads, arguments need, like: [qemu_pid] [cpu_list] -- [19334 10-15,34-38]. \n
+	\t	dump_node \t -- \t dump log from nodes, no arguments need. \n
+	\t	name  \t\t -- \t name the node with vm's tag, no arguments need. \n
+	\t      sshkey \t -- \t config the no-password authentication for vm, no arguments need.\n
+	\t	node_ready \t -- \t check the node booting status, no arguments need.\n
+	\t	check_cpu \t -- \t check the cpu \n
+	\t	up_freq \t -- \t improve the frequency \n
+	\t	net \t\t -- \t check the TCP R/T status \n
+	\t	io \t\t -- \t check the io status \n
+	\t	dev_net \t -- \t check the bw of device(s) of network betw vm and node \n
+	\t	iperf \t\t -- \t test the network's performance betw vm and node \n
+	\t	version \t -- \t print version of this script
+	\n
+	to show this help message: \n
+	\t	help|-h|--help|-? \n
+	\n
+	\n	./sconsole vm sudo tail -n7 /etc/vca_config.d/vca_auto_boot.sh \| grep -v esac
+	\n	./sconsole node cat /boot/grub.cfg \| grep i915.enable \| awk \'\{print \\\$NF\}\'
+	\n	./sconsole vm sudo nproc --all
+	\n	./sconsole vm sudo sar -u 2 30 \| awk \'\\\$2 \=\= \"CPU\" \|\| \\\$1 \=\= \"Average\:\" \{print \\\$0\}\'
+	\n	
+	\n	[disable scan]	./sconsole vm sudo sed -i 's/scan_for_devices\$/#scan_for_devices/\;s/vop_reset\ /#vop_reset\ /' /etc/vca_config.d/vca_auto_boot.sh
+	\n	[disable scan]  ./sconsole vm sudo /home/media/disable-scan
+	\n	[enable_ scan]  ./sconsole vm sudo sed -i 's/#scan_for_devices/scan_for_devices/\;s/#vop_reset/vop_reset/' /etc/vca_config.d/vca_auto_boot.sh
+	\n	[enable_ scan]  ./sconsole vm sudo /home/media/enable-scan
+	\n      [check the node mapping info of each vca driver] lspci | grep 295* | grep -v 8717 | awk '{print \$1}' | while read line ; do node=\`cat /sys/bus/pci/devices/0000:\$line/numa_node\` ;echo \$line -- \$node ;done
+	\n
+	EOM
+	)
+		
+		
+	case $1 in 
+	settings) 
+		shift
+		check_nodes $@
+		;;
+	dump_node)
+		shift
+		dump_node_log
+		;;
+	vm)
+		shift
+		vm_cmd $@
+		;;
+	node)
+		shift
+		node_cmd $@
+		;;
+	sshkey)
+		shift
+		cfg_sshkey 
+		;;
+	node_ready)
+		shift
+		boot_intonode
+		;;
+	scopy_tovm)
+		shift
+		scopy_tovm $@
+		;;
+	name)
+		shift
+		fetch_node_name $@
+		;;
+	scopy)
+		shift
+		_mode=$1
+		if [[ "${_mode}" != "tovm" ]] && [[ "${_mode}" != "tonode" ]]
+		#if [[ "${_mode}" != "tovm" && "${_mode}" != "tonode" ]]
+		then
+                        echo "unsupported arguments, need [tovm] or [tonode]"
+                        exit -1
+                fi
+		echo "mode: $_mode"
+		shift
+		echo "args: $@"
+		scopy $@
+		;;
+	net)
+		shift
+		[[ $1 ]] && _tag=$1 || _tag="default"
+		echo "tag: $_tag"
+		net_tcp_check $_tag
+		;;
+	io) 
+		shift
+		[[ $1 ]] && _tag=$1 || _tag="def"
+		echo "tag: $_tag"
+		device_io_check $_tag
+		;;
+	irr)
+		shift
+		check_irr $@
+		;;
+	check_cpu)
+		shift
+		check_cpu $@
+		;;
+	up_freq)
+		shift
+		up_freq $@
+		;;
+	bypass)
+		shift
+		bypass_vm $@
+		;;
+	enable)
+		shift
+		enable_vm $@
+		;;
+	enableall)
+		shift
+		enable_all 
+		;;
+	list)
+		shift 
+		vm_list
+		;;
+	ssar)
+		shift
+		while [ "$#" -gt 0 ]
+		do
+			case $1 in
+			-s) sec=$2
+			shift
+			shift
+			;;
+			-l) loop=$2
+			shift
+			shift
+			;;
+			-u) ucmd="-u"
+			shift
+			;;
+			-p) cpu_list=$2
+			shift
+			shift
+			;;
+			-m) fcmd="-m CPU"
+			shift
+			;;
+			*) echo "unsuport arguments, exit"
+			exit
+			;;
+			esac
+		done
+		host_freq
+		;;
+	topology)
+		shift
+		_type=$1
+		if [[ "${_type}" != "cpu" && "${_type}" != "irr" ]]
+		then
+			echo "unsupported arguments, need [cpu] or [irr]"
+			exit
+		fi
+	
+		if [ "${_type}" == "cpu" ]
+		then
+			shift 
+			[ $1 ] && t_interval=$1 || t_interval=8
+			cpu_topology 
+		else 
+			echo "irr_topology"
+		fi
+		;;
+	allot)
+		shift
+		a_pid=$1
+		shift 
+		a_cpu_list=$1
+		allot_core
+		;;
+	improve)
+		shift
+		improve_freq
+		;;
+	dev_net)
+		shift
+		dev_net
+		;;
+	version)
+		shift
+		echo "$VERSION"
+		;;
+	iperf)
+		shift
+		iperf_test
+		;;
+	'help'|'-h'|'--help'|'-?')
+		echo 
+		echo -e $USAGE
+		;;
+	*)
+		echo "unsupported arguments!!!"
+		echo -e $USAGE
+		exit
+		;;
+	esac
+
+}
+
+main $@
