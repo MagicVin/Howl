@@ -1,0 +1,386 @@
+#!/bin/bash
+conf_vm() {
+
+  case $1 in
+    "vm0")
+      OS_ISO=/root/vm/CentOS-7-x86_64-DVD-1810.iso
+      OS_IMG=/mnt/vm0-os.raw
+      #QEMU_BR=/root/qemu/prepare/qemu_br
+      MEM_SIZE=16G
+      DISK_SIZE=30G
+      DISK_DRIVE=0 # 0: virtio , 1: sata 
+      CPU_NUM=48
+      #TAP_ID=tap-vm0
+      VNC_ID=10
+      SER_LOG=vm0.txt
+      LOCAL_PORT=30000
+      #CPU_BIND=(taskset -c 2-5,106-109)
+      CPU_BIND=(taskset -c 0-23,96-119)
+      MEM_BIND=(numactl -m 0)
+      Pthr=3 # 0: passthr one device, 1: no passthr, 2: passthr sg1, 3: passthr a group of devices(no sg1)
+      BUILD=1 # 0: create a new vm os, !0 do not create a new vm os
+      Vender_id="1af4 1000"
+      #Pthr_ID=(0000:16:00.4)
+      Pthr_ID=(
+        0000:16:00.0
+        0000:16:00.1 
+        0000:16:00.2
+        0000:16:00.3
+	    )
+      #FIO_DISK=(
+      #  /mnt/disk0.raw
+      #  /mnt/disk1.raw
+      #)
+    ;;
+    "vm1")
+      OS_IMG=/mnt/vm1-os.raw
+      #QEMU_BR=/root/qemu/prepare/qemu_br
+      MEM_SIZE=16G
+      DISK_SIZE=30G
+      DISK_DRIVE=0 # 0: virtio , 1: sata 
+      CPU_NUM=48
+      #TAP_ID=tap-vm0
+      VNC_ID=11
+      SER_LOG=vm1.txt
+      LOCAL_PORT=30001
+      #CPU_BIND=(taskset -c 6-9,110-113)
+      CPU_BIND=(taskset -c 24-47,120-143)
+      MEM_BIND=(numactl -m 1)
+      Pthr=3
+      BUILD=1
+      Vender_id="1af4 1000"
+      Pthr_ID=(
+        0000:18:00.1
+        0000:18:00.0 
+        0000:18:00.3 
+        0000:18:00.2
+      )
+      #Pthr_ID=(0000:16:00.5)
+      #FIO_DISK=(
+      #  /mnt/disk2.raw
+      #  /mnt/disk3.raw
+      #)
+    ;;
+    "vm2")
+      OS_IMG=/mnt/vm2-os.raw
+      #QEMU_BR=/root/qemu/prepare/qemu_br
+      MEM_SIZE=16G
+      DISK_SIZE=30G
+      DISK_DRIVE=0 # 0: virtio , 1: sata 
+      CPU_NUM=8
+      #TAP_ID=tap-vm0
+      VNC_ID=12
+      SER_LOG=vm2.txt
+      LOCAL_PORT=30002
+      #CPU_BIND=(taskset -c 10-13,114-117)
+      CPU_BIND=(taskset -c 8-11,104-107)
+      #CPU_BIND=(taskset -c 6-13)
+      MEM_BIND=(numactl -m 0)
+      Pthr=3 # 0: passthr one device, 1: no passthr, 2: passthr sg1, 3: passthr a group of devices(no sg1)
+      BUILD=1 # 0: create a new vm os, !0 do not create a new vm os
+      Vender_id="1af4 1000"
+      Pthr_ID=(0000:16:01.4 0000:16:01.6 0000:16:02.0 0000:16:02.2)
+      #Pthr_ID=(0000:16:04.4)
+      #Pthr_ID=(0000:16:04.4 0000:16:04.6 0000:16:05.0 0000:16:05.2)
+      #Pthr_ID=(
+      #  0000:16:01.4
+      #  0000:16:01.6
+      #  0000:16:02.0
+      #  0000:16:02.2
+      #  0000:16:02.4
+      #  0000:16:02.6
+      #  0000:16:03.0
+      #  0000:16:03.2
+      #)
+      FIO_DISK=(
+        /mnt/disk4.raw
+        /mnt/disk5.raw
+      )
+    ;;
+    "vm3")
+      OS_IMG=/mnt/vm3-os.raw
+      #QEMU_BR=/root/qemu/prepare/qemu_br
+      MEM_SIZE=16G
+      DISK_SIZE=30G
+      DISK_DRIVE=0 # 0: virtio , 1: sata 
+      CPU_NUM=8
+      #TAP_ID=tap-vm0
+      VNC_ID=13
+      SER_LOG=vm3.txt
+      LOCAL_PORT=30003
+      #CPU_BIND=(taskset -c 14-17,118-121)
+      CPU_BIND=(taskset -c 12-15,108-111)
+      #CPU_BIND=(taskset -c 14-21)
+      MEM_BIND=(numactl -m 0)
+      Pthr=3
+      BUILD=1
+      Vender_id="1af4 1000"
+      Pthr_ID=(0000:16:01.5 0000:16:01.7 0000:16:02.1 0000:16:02.3)
+      #Pthr_ID=(0000:16:04.5)
+      #Pthr_ID=(0000:16:04.5 0000:16:04.7 0000:16:05.1 0000:16:05.3)
+      #Pthr_ID=(
+      #  0000:16:01.5
+      #  0000:16:01.7
+      #  0000:16:02.1
+      #  0000:16:02.3
+      #  0000:16:02.5
+      #  0000:16:02.7
+      #  0000:16:03.1
+      #  0000:16:03.3
+      #)
+      FIO_DISK=(
+        /mnt/disk6.raw
+        /mnt/disk7.raw
+      )
+    ;;
+    "vm4")
+      OS_IMG=/mnt/vm4-os.raw
+      #QEMU_BR=/root/qemu/prepare/qemu_br
+      MEM_SIZE=16G
+      DISK_SIZE=30G
+      DISK_DRIVE=0 # 0: virtio , 1: sata 
+      CPU_NUM=8
+      #TAP_ID=tap-vm0
+      VNC_ID=14
+      SER_LOG=vm4.txt
+      LOCAL_PORT=30004
+      CPU_BIND=(taskset -c 16-19,112-115)
+      MEM_BIND=(numactl -m 0)
+      Pthr=3 # 0: passthr one device, 1: no passthr, 2: passthr sg1, 3: passthr a group of devices(no sg1)
+      BUILD=1 # 0: create a new vm os, !0 do not create a new vm os
+      Vender_id="1af4 1000"
+      Pthr_ID=(0000:16:02.4 0000:16:02.6 0000:16:03.0 0000:16:03.2)
+      #Pthr_ID=(
+      #  0000:16:03.4
+      #  0000:16:03.6
+      #  0000:16:04.0
+      #)
+
+      FIO_DISK=(
+        /mnt/disk8.raw
+        /mnt/disk9.raw
+      )
+      #  /mnt/disk2
+      #  /mnt/disk3
+    ;;
+    "vm5")
+      OS_IMG=/mnt/vm5-os.raw
+      #QEMU_BR=/root/qemu/prepare/qemu_br
+      MEM_SIZE=16G
+      DISK_SIZE=30G
+      DISK_DRIVE=0 # 0: virtio , 1: sata 
+      CPU_NUM=8
+      #TAP_ID=tap-vm0
+      VNC_ID=15
+      SER_LOG=vm5.txt
+      LOCAL_PORT=30005
+      CPU_BIND=(taskset -c 20-23,116-119)
+      MEM_BIND=(numactl -m 0)
+      Pthr=3
+      BUILD=1
+      Vender_id="1af4 1000"
+      Pthr_ID=(0000:16:02.5 0000:16:02.7 0000:16:03.1 0000:16:03.3)
+      #Pthr_ID=(
+      #  0000:16:03.5
+      #  0000:16:03.7
+      #  0000:16:04.1
+      #)
+
+      FIO_DISK=(
+        /mnt/disk10.raw
+        /mnt/disk11.raw
+      )
+      #  /mnt/disk6
+      #  /mnt/disk7
+    ;;
+    "vm6")
+      OS_IMG=/mnt/vm6-os.raw
+      #QEMU_BR=/root/qemu/prepare/qemu_br
+      MEM_SIZE=8G
+      DISK_SIZE=30G
+      DISK_DRIVE=0 # 0: virtio , 1: sata 
+      CPU_NUM=4
+      #TAP_ID=tap-vm0
+      VNC_ID=16
+      SER_LOG=vm6.txt
+      LOCAL_PORT=30006
+      CPU_BIND=(taskset -c 14,15,118,119)
+      MEM_BIND=(numactl -m 0)
+      Pthr=3
+      BUILD=1
+      Vender_id="1af4 1000"
+      Pthr_ID=(0000:16:03.4 0000:16:03.6 0000:16:04.0)
+    ;;
+    "vm7")
+      OS_IMG=/mnt/vm7-os.raw
+      #QEMU_BR=/root/qemu/prepare/qemu_br
+      MEM_SIZE=8G
+      DISK_SIZE=30G
+      DISK_DRIVE=0 # 0: virtio , 1: sata 
+      CPU_NUM=4
+      #TAP_ID=tap-vm0
+      VNC_ID=17
+      SER_LOG=vm7.txt
+      LOCAL_PORT=30007
+      CPU_BIND=(taskset -c 16,17,120,121)
+      MEM_BIND=(numactl -m 0)
+      Pthr=3
+      BUILD=1
+      Vender_id="1af4 1000"
+      Pthr_ID=(0000:16:03.5 0000:16:03.7 0000:16:04.1)
+    ;;
+  esac
+}
+
+pthr_insert() {
+  echo "  insert vfio driver"
+  modprobe vfio
+  modprobe msr
+  modprobe vfio_pci
+}
+
+pthr_conf() {
+  pthr_id=$1
+  echo "  1st check vfio: `ls /dev/vfio | xargs`"
+  echo "  echo $pthr_id > /sys/bus/pci/devices/${pthr_id}/driver/unbind"
+  echo $pthr_id > /sys/bus/pci/devices/${pthr_id}/driver/unbind
+  vender_id=`lspci -s $pthr_id -n | cut -d" "  -f3 | awk -F: '{print $1,$2}'`
+  echo "  echo $vender_id > /sys/bus/pci/drivers/vfio-pci/new_id"
+  echo $vender_id > /sys/bus/pci/drivers/vfio-pci/new_id
+  echo "  2nd check vfio: `ls /dev/vfio | xargs`"
+}
+
+cmd_go() {
+  SUPPORT_VM=(vm0 vm1 vm2 vm3 vm4 vm5 vm6 vm7)
+  SUPPORT_IMG=$(cat <<- EOF
+  availiable vm name: ${SUPPORT_VM[@]}
+
+  usage:
+    $0 [name]
+EOF
+)
+
+
+  QEMU_SYSTEM=qemu-system-x86_64
+  default_conf=(
+    $QEMU_SYSTEM
+    -enable-kvm
+    -daemonize
+    -k en-us
+    -machine type=q35,accel=kvm
+    -nic none
+  )
+    #-M pc
+    #-machine type=pc
+    #-machine type=q35,accel=kvm
+
+  [ $# -eq 1 ] && {
+  case $1 in 
+    vm0|vm1|vm2|vm3|vm4|vm5|vm6|vm7)
+      conf_vm $1
+      [[ $CPU_TYPE ]] && default_conf=(${default_conf[@]} -cpu ${CPU_TYPE},kvm=off) || default_conf=(${default_conf[@]} -cpu host)
+      [[ $CPU_BIND ]] && qemu_cmds=(${CPU_BIND[@]} )
+      [[ $MEM_BIND ]] && qemu_cmds=(${qemu_cmds[@]} ${MEM_BIND[@]})
+      qemu_cmds=(${qemu_cmds[@]} ${default_conf[@]})
+      [[ $MEM_SIZE ]] && qemu_cmds=(${qemu_cmds[@]} -m $MEM_SIZE )
+      [[ $CPU_NUM ]] && qemu_cmds=(${qemu_cmds[@]} -smp cpus=$CPU_NUM,cores=$CPU_NUM,sockets=1 )
+
+      [[ $DISK_DRIVE -eq 0 ]] && {
+        [[ $OS_IMG ]] && qemu_cmds=(${qemu_cmds[@]} -drive if=virtio,file=$OS_IMG,format=raw)
+        [[ $DATA_IMG ]] && qemu_cmds=(${qemu_cmds[@]} -drive if=virtio,file=$DATA_IMG,format=raw)
+        [[ ${#FIO_DISK[@]} -gt 0 ]] && {
+          for i in ${FIO_DISK[@]} ;{
+            qemu_cmds=(${qemu_cmds[@]} -drive if=virtio,file=$i,format=raw)
+          }
+        }
+        :
+      } || {
+        [[ $OS_IMG ]] && qemu_cmds=(${qemu_cmds[@]} -hda $OS_IMG)
+        [[ $DATA_IMG ]] && qemu_cmds=(${qemu_cmds[@]} -hdb $DATA_IMG)
+      }
+      #[[ $MAC_ADDR ]] && [[ $TAP_ID ]] && [[ $QEMU_BR ]] && {
+      [[ $TAP_ID ]] && [[ $QEMU_BR ]] && {
+      qemu_cmds=(${qemu_cmds[@]} -device e1000,netdev=network0
+          -netdev tap,id=network0,ifname=$TAP_ID,vhostforce=on,script=$QEMU_BR,downscript=no
+        )
+      }
+      #[[ $OS_ISO ]] && qemu_cmds=(${qemu_cmds[@]} -cdrom $OS_ISO -boot d)
+      [[ $VNC_ID ]] && qemu_cmds=(${qemu_cmds[@]} -vnc :$VNC_ID)
+      [[ $SER_LOG ]] && qemu_cmds=(${qemu_cmds[@]} -serial file:$SER_LOG)
+
+      # Pthr == 1 -- no passthr
+      # Pthr == 0 -- passthr one device
+      # Pthr == 2 -- passthr SG1 device
+      # Pthr == 3 -- passthr a group devices(no sg1)
+
+      [ $Pthr -ne 1 ] && pthr_insert
+      [ $Pthr -eq 0 ] && qemu_cmds=(${qemu_cmds[@]} -device vfio-pci,host=$Pthr_ID0)
+      [ $Pthr -eq 2 ] && [[ $Vender_id ]] && { 
+        echo $Vender_id > /sys/bus/pci/drivers/vfio-pci/new_id
+        qemu_cmds=(${qemu_cmds[@]} ${Pthr_group[@]}) 
+      }
+
+      [ $Pthr -eq 3 ] && [[ $Vender_id ]] && { 
+        echo "  1st check vfio: `ls /dev/vfio | xargs`"
+        count=0
+        for i in ${Pthr_ID[@]} ;{
+	        echo "  echo $i > /sys/bus/pci/devices/${i}/driver/unbind"
+          echo $i > /sys/bus/pci/devices/${i}/driver/unbind
+          qemu_cmds=(${qemu_cmds[@]} -device pcie-root-port,chassis=${count},id=pci.${count},multifunction=on)
+          qemu_cmds=(${qemu_cmds[@]} -device vfio-pci,host=${i},bus=pci.${count})
+          count=$((count+1))
+	      }
+        echo "  echo $Vender_id > /sys/bus/pci/drivers/vfio-pci/new_id"
+        echo $Vender_id > /sys/bus/pci/drivers/vfio-pci/new_id
+        echo "  2nd check vfio: `ls /dev/vfio | xargs`"
+
+        #-device pcie-root-port,chassis=0,id=pci.0,multifunction=on
+        #-device vfio-pci,host=16:00.4,bus=pci.0
+        #qemu_cmds=(${qemu_cmds[@]} ${Pthr_group[@]}) 
+      }
+
+      [[ $LOCAL_PORT ]] && qemu_cmds=(${qemu_cmds[@]} -device e1000,netdev=net0 -netdev user,id=net0,hostfwd=tcp::${LOCAL_PORT}-:22)
+      
+      [ $BUILD -eq 0 ] && {
+        [[ $OS_ISO ]] && [[ $OS_IMG ]] && [[ $DISK_SIZE ]] && {
+          qemu-img create -f raw $OS_IMG $DISK_SIZE && qemu_cmds=(${qemu_cmds[@]} -cdrom $OS_ISO -boot d) || {
+            echo "  img build failed"
+            exit
+          }
+        } || {
+          echo "  need img path or size -- OS_IMG|DISK_SIZE: $OS_IMG|$DISK_SIZE"
+          exit
+        }
+      }
+      if [[ $TAP_ID ]]
+      then
+        ip link show $TAP_ID > /dev/null 2>&1 && ip link delete dev $TAP_ID
+        sleep 2
+      fi
+
+      echo "  cleaning cache ..."
+      sync
+      echo 3 > /proc/sys/vm/drop_caches
+
+
+      [ $Pthr -eq 0 ] && {
+        echo "  starting passthrough ..."
+        pthr_conf $Pthr_ID0
+      }
+      echo "  starting vm ..."
+      echo "  ${qemu_cmds[@]}"
+      ${qemu_cmds[@]}
+    ;;
+    *)
+      echo "  unsupported vm name"
+      echo "${SUPPORT_IMG}"
+    ;;
+  esac
+  :
+  } || {
+    echo "  missed vm name"
+    echo "${SUPPORT_IMG}"
+  }
+}
+
+cmd_go $1
