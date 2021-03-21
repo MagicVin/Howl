@@ -1,7 +1,7 @@
 #!/bin/bash
 # xinx.e.zhang@intel.com
-# Mar 20, 2021
-# v1.0
+# Mar 21, 2021
+# v1.1
 
 options() {
 
@@ -137,9 +137,9 @@ stress_wait() {
     } || {
       echo "stress is done"
       parse_log | tee result.log
-      break
       rm -rf *in*
       rm -rf *out*
+      break
     }
   done
 }
@@ -153,8 +153,8 @@ parse_log() {
     per_log=$i.txt
     #[ -s $i.txt ] && sed -e 's/\r/\n/g' $i.txt | awk '/Past/ || /lib/ {next} /frame/,/max/ { print }'| tee -a stress.log
     [ -s $per_log ] && {
-      avg_fps[i]=`sed -e 's/\r/\n/g' $per_log | grep fps | awk '{sum+=$4} END {print sum/NR}'`
-      end_fps[i]=`sed -e 's/\r/\n/g' $per_log | awk '/Lsize/ {print $4}'`
+      avg_fps[i]=`sed -e 's/\r/\n/g' $per_log | grep fps | awk -F '=' '{sum+=$3} END {gsub(" q","");print sum/NR}'`
+      end_fps[i]=`sed -e 's/\r/\n/g' $per_log | awk -F '=' '/Lsize/ {gsub(" q","");print $3}'`
       cpu_time[i]=`sed -e 's/\r/\n/g' $per_log | awk -F '=' '/utime/ {print $2}'`
       max_mem[i]=`sed -e 's/\r/\n/g' $per_log | awk -F '=' '/maxrss/ {print $2}'`
     }
@@ -165,7 +165,7 @@ parse_log() {
   avg_ctime=`echo ${cpu_time[@]} | awk '{for(i=1;i<=NF;i++){a+=$i}} END {printf ("%-d", a/NF)}'`
   avg_mmem=`echo ${max_mem[@]} | awk '{for(i=1;i<=NF;i++){a+=$i}} END {printf ("%-d", a/NF)}'`
 
-  printf "%-6s %-7s %-7s %-8s %s\n" "thread" "ref_fps" "avg_fps" "cpu_time" "max_memUse"
+  printf "%-6s %-6s %-7s %-8s %s\n" "thread" "ref_fps" "avg_fps" "cpu_time" "max_memUse"
   for ((i=0;i<stress_loops;i++)) ;{
     printf "%-6s %-7s %-7s %-8s %s\n" "$i" "${end_fps[i]}" "${avg_fps[i]}" "${cpu_time[i]}" "${max_mem[i]}"
   }
