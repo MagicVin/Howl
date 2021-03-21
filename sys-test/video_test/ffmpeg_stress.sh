@@ -79,19 +79,19 @@ parse_opts() {
   #heads="FFREPORT=file=${log_name}:level=-8 ffmpeg -y -stats"
   #heads="ffmpeg -y -stats -vstats"
   heads="ffmpeg -y -stats"
-  mids=" "
+  mids=()
   tails="-hide_banner -benchmark"
   [[ $input_file ]] && [ -s $input_file ] || {
     echo "file:$input_file does not exist"
     exit
   }
 
-  [[ $video_bitrate ]] && mids="$mids -b:v $video_bitrate"
-  [[ $audio_bitrate ]] && mids="$mids -b:a $audio_bitrate"
-  [[ $framesize ]] && mids="$mids -s $framesize"
-  [[ $framerate ]] && mids="$mids -r $framerate"
+  [[ $video_bitrate ]] && mids=(${mids[@]} -b:v $video_bitrate)
+  [[ $audio_bitrate ]] && mids=(${mids[@]} -b:a $audio_bitrate)
+  [[ $framesize ]] && mids=(${mids[@]} -s $framesize)
+  [[ $framerate ]] && mids=(${mids[@]} -r $framerate)
   #[[ $vcodec ]] && mids="$mids -vcodec $vcodec"
-  [[ $vcodec ]] && mids="$mids -c:v $vcodec" || mids="$mids -c:v libx264 -c:a copy" #libx264
+  [[ $vcodec ]] && mids=(${mids[@]} -c:v $vcodec) || mids=(${mids[@]} -c:v libx264 -c:a copy) #libx264
   [[ $loops ]] && stress_loops=$loops || stress_loops=1
 
 }
@@ -113,10 +113,10 @@ loops_stress() {
     oname=$i-out.mp4
     [[ $i -eq 0 ]] && [[ $output_file ]] && oname=$output_file
     [ -s $iname ] && {
-      cmds="$heads -i $iname $mids $tails $oname > $i.txt 2>&1 &"
+      cmds="$heads -i $iname ${mids[@]} $tails $oname > $i.txt 2>&1 &"
       echo "cmds: $cmds"
       #$cmds 
-      $heads -i $iname $mids $tails $oname > $i.txt 2>&1 &
+      $heads -i $iname ${mids[@]} $tails $oname > $i.txt 2>&1 &
       pids_arr[i]=$!
       sleep 0.5
     } || {
@@ -155,7 +155,7 @@ parse_log() {
     [ -s $per_log ] && {
       avg_fps[i]=`sed -e 's/\r/\n/g' $per_log | grep fps | awk -F '=' '{sum+=$3} END {gsub(" q","");print sum/NR}'`
       end_fps[i]=`sed -e 's/\r/\n/g' $per_log | awk -F '=' '/Lsize/ {gsub(" q","");print $3}'`
-      cpu_time[i]=`sed -e 's/\r/\n/g' $per_log | awk -F '=' '/utime/ {print $2}'`
+      cpu_time[i]=`sed -e 's/\r/\n/g' $per_log | awk -F '=' '/utime/ {gsub("stime","");print $2}'`
       max_mem[i]=`sed -e 's/\r/\n/g' $per_log | awk -F '=' '/maxrss/ {print $2}'`
     }
   }
@@ -165,11 +165,11 @@ parse_log() {
   avg_ctime=`echo ${cpu_time[@]} | awk '{for(i=1;i<=NF;i++){a+=$i}} END {printf ("%-d", a/NF)}'`
   avg_mmem=`echo ${max_mem[@]} | awk '{for(i=1;i<=NF;i++){a+=$i}} END {printf ("%-d", a/NF)}'`
 
-  printf "%-6s %-6s %-7s %-8s %s\n" "thread" "ref_fps" "avg_fps" "cpu_time" "max_memUse"
+  printf "%-11s %-10s %-10s %-10s %s\n" "thread" "ref_fps" "avg_fps" "cpu_time" "max_memUse"
   for ((i=0;i<stress_loops;i++)) ;{
-    printf "%-6s %-7s %-7s %-8s %s\n" "$i" "${end_fps[i]}" "${avg_fps[i]}" "${cpu_time[i]}" "${max_mem[i]}"
+    printf "%-11s %-10s %-10s %-10s %s\n" "$i" "${end_fps[i]}" "${avg_fps[i]}" "${cpu_time[i]}" "${max_mem[i]}"
   }
-  printf "%-6s %-7s %-7s %-8s %s\n" "avg" "$avg_efps" "$avg_afps" "${avg_ctime}s" "${avg_mmem}kB"
+  printf "%-11s %-10s %-10s %-10s %s\n" "avg" "$avg_efps" "$avg_afps" "${avg_ctime}s" "${avg_mmem}kB"
 
 }
 
