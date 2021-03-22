@@ -1,7 +1,7 @@
 #!/bin/bash
 # xinx.e.zhang@intel.com
-# Mar 21, 2021
-# v1.1
+# Mar 22, 2021
+# v1.2
 
 options() {
 
@@ -130,8 +130,10 @@ loops_stress() {
 stress_wait() {
   while true
   do
-    pids="`echo ${pids_arr[@]} | sed 's/ /\|/g'`"
-    ps aux | egrep $pids | grep -v grep > /dev/null 2>&1
+    pids="`echo ${pids_arr[@]} | sed 's/ / \|/g'`"
+    echo "$pids"
+    #ps aux | egrep $pids | grep -v grep > /dev/null 2>&1
+    ps aux | egrep "$pids" | grep -v grep 
     [ $? -eq 0 ] && {
       sleep 5
     } || {
@@ -153,7 +155,7 @@ parse_log() {
     per_log=$i.txt
     #[ -s $i.txt ] && sed -e 's/\r/\n/g' $i.txt | awk '/Past/ || /lib/ {next} /frame/,/max/ { print }'| tee -a stress.log
     [ -s $per_log ] && {
-      avg_fps[i]=`sed -e 's/\r/\n/g' $per_log | grep fps | awk -F '=' '{sum+=$3} END {gsub(" q","");print sum/NR}'`
+      avg_fps[i]=`sed -e 's/\r/\n/g' $per_log | grep fps= | awk -F '=' '{sum+=$3} END {gsub(" q","");print sum/NR}'`
       end_fps[i]=`sed -e 's/\r/\n/g' $per_log | awk -F '=' '/Lsize/ {gsub(" q","");print $3}'`
       cpu_time[i]=`sed -e 's/\r/\n/g' $per_log | awk -F '=' '/utime/ {gsub("stime","");print $2}'`
       max_mem[i]=`sed -e 's/\r/\n/g' $per_log | awk -F '=' '/maxrss/ {print $2}'`
