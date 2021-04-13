@@ -1,17 +1,30 @@
 #!/usr/bin/env ruby
 # xinx.e.zhang@intel.com
-# Jan 29. 2021
-# v1.0
+# Jan 31. 2021
+# v1.1
+
+require 'optparse'
 
 class Interrupts 
   attr_reader :cpu_list
   attr_reader :irq_list
   attr_reader :inter_file
+  attr_reader :options
 
   def initialize()
     @cpu_list = ""
     @irq_list = ""
     @inter_file = "/proc/interrupts"
+    opts
+  end
+
+  def opts
+    @options = {}
+    OptionParser.new do |opt|
+      opt.banner = "Usage: ./#{File.basename(__FILE__)} -c [cpu_num] -i [irq_num]"
+      opt.on("-c", "--cpu-list CPU_LIST", "set cpus") { |v| @options[:cpu] = v }
+      opt.on("-i", "--irq-list IRQ_LIST", "set irqs") { |v| @options[:irq] = v }
+    end.parse!
   end
 
   def set(cpu = 0 ,irq = 0)
@@ -110,13 +123,33 @@ class Interrupts
   end
 end
 
+def parse(list = "")
+  # support: 1,2,3,4-8,9-11
+  ret = ""
+  unless list.instance_of? NilClass || list.empty?
+    list.split(',').each do |i|
+      if /-/ =~ i
+        Range.new(i.split('-')[0].to_i,i.split('-')[1].to_i).each { |r| ret += "#{r.to_s} " } if i.split('-').size == 2
+      else
+        ret += "#{i.to_s} "
+      end
+
+    end
+  ret = ret.split().uniq.join(" ")
+  end
+
+  return ret
+end
+
+
 def main 
   #part of cpu and irq
   inter = Interrupts.new
-  cpu = "0-15"
-  irq = "LOC"
+  cpu = parse(inter.options[:cpu])
+  irq = parse(inter.options[:irq])
   inter.set(cpu,irq)
-  while true
+  5.times do
+    puts Time.now
     inter.read
     sleep 1
   end
@@ -126,3 +159,5 @@ def main
 end
 
 main
+
+
