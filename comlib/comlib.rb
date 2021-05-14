@@ -157,15 +157,22 @@ module Irq
       dev_table = irq device(dev)
       irqs = ""
       cpus = ""
+      dev_nodes = ""
       dev_table.each do |k,v|
-        v.each do |key, value|
-          unless key == :devnode
-            irqs += "#{value[:id]} "
-            cpus += "#{value[:cpu]} "
+        irqs += "#{k}/"
+        irqs += "#{v[:devnode]}/"
+        dev_irqs = Array.new
+        dev_cpus = Array.new
+        v.each do |key, value| 
+          if key != :devnode
+            dev_irqs << "#{value[:id]}"
+            dev_cpus << "#{value[:cpu]}"
           end
         end
+        irqs += "#{dev_irqs.join(",")}/#{dev_cpus.join(",")})" unless dev_irqs.empty? || dev_cpus.empty?
       end
-      puts "#{dev_table.keys.join(",")}/#{irqs.split().join(',')}/#{cpus.split().join(',')}"
+      # dev0/dev0_node/irqs0/cpus0)dev1/dev1_node/irqs1/cpus1
+      irqs
     end
   end
 
@@ -259,7 +266,98 @@ module Interrupts
       end
 
       cpus_len = interrupts_map[0].size
-
+      req_arr = Array.new
+      irq_list.split().each do |irq|
+        per_arr = Array.new
+        interrupts_map.each_with_index do |irqs, idx|
+          unless idx == 0
+            if "#{irq}:" == irqs[0]
+              unless irqs.size < cpus_len
+                name = irqs[(cpus_len+1)..-1].join("_" )
+                per_arr << irqs[0]
+                per_arr.concat(irqs[1..cpus_len])
+                per_arr << name
+              else
+                per_arr.concat(irqs)
+              end
+            end
+          end
+        end
+        req_arr << per_arr unless per_arr.empty?
+      end
+      req_arr.each { |i| req_table[i[0]] = sumArr(i[1..cpus_len]) }
     end
+    req_table
+  end
+
+  def loop_irq( irqs = "" )
+    bef_time = Time.now.strftime("%H:%M:%S")
+    bef = cal_irq(irqs)
+    sleep 1
+    aft = cal_irq(irqs)
+    aft_time = Time.now.strftime("%H:%M:%S")
+    bef_all = 0
+    aft_all = 0
+    all = 0
+    printf  "%-8s %-16s %-16s %s\n" , "---", bef_time, aft_time, "rise"
+    bef.keys.each do |k|
+      bef_all += bef[k].to_i
+      aft_all += aft[k].to_i
+      all += (aft[k] - bef[k]).to_i
+      printf  "%-8s %-16d %-16d %d\n" , k, bef[k].to_i, aft[k].to_i, (aft[k] - bef[k]).to_i
+    end
+    printf  "%-8s %-16d %-16d %d\n" , "Total", bef_all, aft_all, all
+  end
+
+  def cal_both( cpus = "", irqs = "")
+    req_table = Array.new
+    unless cpus.empty? && irqs.empty?
+      cpu_list = parseStr(cpus).split()
+      irq_list = parseStr(irqs).split()
+      interrupts_map = Array.new
+      req_map = Array.new
+
+      File.open("/proc/interrupts", 'r') do |io|
+        while content =  io.gets
+          interrupts_map << content.split()
+        end
+      end
+     
+      cpu_idx = Array.new
+      cpu_list.map! { |i| "CPU#{i}" }
+      req_table[0] = Array.new
+      cpu_list.each do |c| 
+        if interrupts_map[0].include?(c)
+          cpu_idx << interrupts_map[0].index(c)
+          req_table[0] << c
+        end
+      end
+
+      irq_list.each do |i|
+        interrupts_map.each do |list|
+          if list[0] == "#{i}:"
+            value_arr = Array.new
+            value_arr << list[0]
+            cpu_idx.each { |c| value_arr << list[c+1] }
+            req_table << value_arr
+          end
+        end
+      end
+
+      req_table.each { |i| p i }
+    end
+  end
+
+  def cal_cpuside(table = {})
+    sum_table = Hash.new 
+    unless table.empty?
+      table[0].each do |c|
+        cidx = table[0].index(c)
+        sum = 0.0
+        table[1..-1].each { |i| sum += i[cidx+1] }
+        sum_table[c] = sum.to_i
+      end
+    end
+    sum_tabl
   end
 end
