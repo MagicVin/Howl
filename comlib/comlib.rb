@@ -199,13 +199,13 @@ end
 
 module Interrupts
   include Common
+
   def cal_cpu( cpus = "")
     req_table = Hash.new
     unless cpus.empty?   
       cpu_list = parseStr(cpus)
       interrupts_map = Array.new
 
-      line = 0
       File.open("/proc/interrupts", 'r') do |io|
         while content =  io.gets 
           interrupts_map << content.split()
@@ -232,6 +232,56 @@ module Interrupts
     end
     req_table
   end
+
+  def cal_cpu_table( cpus = "")
+    unless cpus.empty?   
+      cpu_list = parseStr(cpus)
+      interrupts_map = Array.new
+      File.open("/proc/interrupts", 'r') do |io|
+        while content =  io.gets 
+          interrupts_map << content.split()
+        end
+      end
+      irq_arr = Array.new
+      interrupts_map.each_with_index { |v,i| irq_arr << v[0] unless i == 0 }
+
+      req_arr = Array.new
+      cpu_list.split().each do |cpu|
+        per_arr = Array.new
+        if interrupts_map[0].index("CPU#{cpu}")
+          cpu_index = interrupts_map[0].index("CPU#{cpu}")
+          per_arr << interrupts_map[0][cpu_index]
+          interrupts_map.each_with_index do |value, idx|
+            unless idx == 0
+              irq_index = cpu_index + 1
+              per_arr << value[irq_index] unless value[irq_index].to_s.empty?
+              per_arr << "0" if value[irq_index].to_s.empty?
+            end
+          end
+        end
+        req_arr << per_arr unless per_arr.empty?
+      end
+      
+      mul_tables = Array.new
+      req_arr.each do |list|
+        tables = Hash.new
+        list.each_with_index do |v,i|
+          tables["cpu"] = v if i == 0
+          tables[irq_arr[i-1]] = v unless i == 0
+        end
+        mul_tables << tables
+      end
+
+      mul_tables[0].keys.each do |k|
+      printf "#{k} "
+        mul_tables.each do |l|
+          printf "#{l[k]} ,"
+        end
+        puts
+      end
+    end
+  end
+
 
   def loop_cpu( cpus = "")
     bef_time = Time.now.strftime("%H:%M:%S")
